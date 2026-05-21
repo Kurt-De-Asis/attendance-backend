@@ -323,9 +323,22 @@ const handleScan = async (req, res) => {
       const finalStatus = (existing?.start_status === 'late') ? 'late' : 'present';
 
       if (!existing || !existing.start_scan_time) {
-        // IMPORTANT: don't “auto-fix” time-out with a different session.
-        // This prevents accidental end scans for students before their subject window.
-        action = 'end_requires_start_scan';
+        if (!existing) {
+          await connection.execute(
+            `INSERT INTO attendance (session_id, student_id, start_scan_time, start_status, status)
+             VALUES (?, ?, ?, 'late', 'late')`,
+            [sessionId, student.id, mysqlDateTime]
+          );
+        } else {
+          await connection.execute(
+            `UPDATE attendance
+             SET start_scan_time = ?, start_status = 'late', status = 'late'
+             WHERE session_id = ? AND student_id = ?`,
+            [mysqlDateTime, sessionId, student.id]
+          );
+        }
+        updated = true;
+        action = 'start_scanned';
       } else {
         await connection.execute(
           `UPDATE attendance
