@@ -382,10 +382,6 @@ const handleScan = async (req, res) => {
         if (action === 'end_scanned') {
           computedStatus = (existing?.start_status === 'late' || (action === 'start_scanned' && isAfterLateThreshold)) ? 'late' : 'present';
         }
-      } else if (action === 'end_requires_start_scan') {
-        requiresEndRescan = true;
-        responseMessage = `No time found for this student (please scan TIME IN first).`;
-        computedStatus = 'late';
       } else if (hasEnd) {
         responseMessage = `✅ Attendance completed for ${student.full_name}`;
       } else if (hasStart) {
@@ -474,8 +470,9 @@ const handleScan = async (req, res) => {
     }
 
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Auto-scan failed' });
+    const msg = err?.message || 'Auto-scan failed';
+    console.error('Scan error:', msg, err?.stack);
+    res.status(500).json({ error: msg });
   }
 };
 
