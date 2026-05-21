@@ -153,11 +153,15 @@ const handleScan = async (req, res) => {
       }
 
       if (!targetSubject) {
-        return res.status(400).json({ 
-          error: 'No active class found for this student at current time',
-          currentTime: currentTimeStr,
-          enrolled: enrolledSubjects
-        });
+        if (enrolledSubjects.length > 0) {
+          targetSubject = enrolledSubjects[0];
+        } else {
+          return res.status(400).json({ 
+            error: 'No active class found for this student at current time',
+            currentTime: currentTimeStr,
+            enrolled: enrolledSubjects
+          });
+        }
       }
     }
 
