@@ -153,15 +153,11 @@ const handleScan = async (req, res) => {
       }
 
       if (!targetSubject) {
-        if (enrolledSubjects.length > 0) {
-          targetSubject = enrolledSubjects[0];
-        } else {
-          return res.status(400).json({ 
-            error: 'No active class found for this student at current time',
-            currentTime: currentTimeStr,
-            enrolled: enrolledSubjects
-          });
-        }
+        return res.status(400).json({ 
+          error: 'No active class found for this student at current time',
+          currentTime: currentTimeStr,
+          enrolled: enrolledSubjects
+        });
       }
     }
 
@@ -385,10 +381,10 @@ const handleScan = async (req, res) => {
         responseMessage = `✅ Attendance completed for ${student.full_name}`;
       } else if (hasStart) {
         requiresEndRescan = true;
-        responseMessage = `Re-scan required to record end time for ${student.full_name} - ${targetSubject.name}`;
+        responseMessage = `⚠️ Late Check-In recorded for ${student.full_name}. Scan again to log Time-Out for ${targetSubject.name}.`;
       } else {
         requiresEndRescan = true;
-        responseMessage = `Late: start time was missed. Re-scan required to record end time for ${student.full_name} - ${targetSubject.name}`;
+        responseMessage = `⚠️ Late Check-In recorded for ${student.full_name}. Scan again to log Time-Out for ${targetSubject.name}.`;
         computedStatus = 'late';
       }
     } else if (isBeforeStart) {
