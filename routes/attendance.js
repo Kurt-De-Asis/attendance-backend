@@ -285,7 +285,7 @@ const handleScan = async (req, res) => {
         // - After start+15 but still within class window => late
         // - After start+30 => absent
         const startStatus = (isBeforeStart || isWithinGrace) ? 'on_time' : (isAfterAbsentThreshold ? 'missing' : 'late');
-        const finalStatus = startStatus === 'on_time' ? 'present' : (startStatus === 'late' ? 'late' : 'absent');
+        const finalStatus = 'absent'; // Must time-out to earn present/late
 
         if (!existing) {
           await connection.execute(
@@ -315,11 +315,10 @@ const handleScan = async (req, res) => {
       const endStatus = 'on_time';
 
       // Keep final status consistent with whether start was late
-      const finalStatus = (existing?.start_status === 'late') ? 'late' : 'present';
-
+      const finalStatus = existing?.start_status === 'on_time' ? 'present' : (existing?.start_status === 'late' ? 'late' : 'absent');
       if (!existing || !existing.start_scan_time) {
         const startStatus = isAfterAbsentThreshold ? 'missing' : 'late';
-        const finalStatus = startStatus === 'late' ? 'late' : 'absent';
+        const finalStatus = 'absent'; // Must time-out to earn present/late
         if (!existing) {
           await connection.execute(
             `INSERT INTO attendance (session_id, student_id, start_scan_time, start_status, status)
@@ -375,7 +374,7 @@ const handleScan = async (req, res) => {
       if (action === 'end_scanned' || (hasEnd && !updated)) {
         responseMessage = `✅ SUCCESS: Time-Out recorded for ${student.full_name}`;
         if (action === 'end_scanned') {
-          computedStatus = (existing?.start_status === 'late' || (action === 'start_scanned' && isAfterLateThreshold)) ? 'late' : 'present';
+          computedStatus = existing?.start_status === 'on_time' ? 'present' : (existing?.start_status === 'late' ? 'late' : 'absent');
         }
       } else if (hasEnd) {
         responseMessage = `✅ Attendance completed for ${student.full_name}`;
@@ -385,19 +384,19 @@ const handleScan = async (req, res) => {
       } else {
         requiresEndRescan = true;
         responseMessage = `⚠️ Late Check-In recorded for ${student.full_name}. Scan again to log Time-Out for ${targetSubject.name}.`;
-        computedStatus = 'late';
+        computedStatus = 'absent';
       }
     } else if (isBeforeStart) {
       if (updated && action === 'start_scanned') {
         responseMessage = `✅ SUCCESS: Early Check-In for ${student.full_name}`;
-        computedStatus = 'present';
+        computedStatus = 'absent';
       } else {
         responseMessage = `✅ Confirmed: ${student.full_name} is already Checked-In (Early).`;
       }
     } else if (isWithinStartToEnd) {
       if (updated && action === 'start_scanned') {
         responseMessage = `✅ SUCCESS: Time-In recorded for ${student.full_name}`;
-        computedStatus = (isAfterLateThreshold) ? 'late' : 'present';
+        computedStatus = 'absent';
       } else {
         responseMessage = `✅ Confirmed: ${student.full_name} is already Checked-In.`;
       }
