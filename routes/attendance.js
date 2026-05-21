@@ -288,8 +288,8 @@ const handleScan = async (req, res) => {
         // - From start <= time <= start+15 => on_time
         // - After start+15 but still within class window => late
         // - After start+30 => absent
-        const startStatus = (isBeforeStart || isWithinGrace) ? 'on_time' : (isAfterAbsentThreshold ? 'absent' : 'late');
-        const finalStatus = (startStatus === 'late' || startStatus === 'absent') ? startStatus : 'present';
+        const startStatus = (isBeforeStart || isWithinGrace) ? 'on_time' : (isAfterAbsentThreshold ? 'missing' : 'late');
+        const finalStatus = startStatus === 'on_time' ? 'present' : (startStatus === 'late' ? 'late' : 'absent');
 
         if (!existing) {
           await connection.execute(
@@ -301,10 +301,9 @@ const handleScan = async (req, res) => {
         } else {
           await connection.execute(
             `UPDATE attendance
-             SET start_scan_time = ?, start_status = ?,
-                 status = CASE WHEN ? = 'late' THEN 'late' WHEN ? = 'absent' THEN 'absent' ELSE status END
+             SET start_scan_time = ?, start_status = ?, status = ?
              WHERE session_id = ? AND student_id = ?`,
-            [mysqlDateTime, startStatus, startStatus, startStatus, sessionId, student.id]
+            [mysqlDateTime, startStatus, finalStatus, sessionId, student.id]
           );
 
         }
@@ -323,7 +322,7 @@ const handleScan = async (req, res) => {
       const finalStatus = (existing?.start_status === 'late') ? 'late' : 'present';
 
       if (!existing || !existing.start_scan_time) {
-        const startStatus = isAfterAbsentThreshold ? 'absent' : 'late';
+        const startStatus = isAfterAbsentThreshold ? 'missing' : 'late';
         const finalStatus = startStatus === 'late' ? 'late' : 'absent';
         if (!existing) {
           await connection.execute(
