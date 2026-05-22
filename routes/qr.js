@@ -162,4 +162,96 @@ router.post('/enroll', async (req, res) => {
   }
 });
 
+// Replace all subject enrollments for a student
+router.put('/enroll/student/:studentId', roleAuth(['admin']), async (req, res) => {
+  try {
+    const { studentId } = req.params;
+    const { subjectIds } = req.body;
+
+    if (!Array.isArray(subjectIds)) {
+      return res.status(400).json({ error: 'subjectIds must be an array' });
+    }
+
+    let connection = await pool.getConnection();
+
+    try {
+      await connection.beginTransaction();
+
+      const [students] = await connection.execute(
+        'SELECT id, student_id, full_name, grade_level FROM users WHERE id = ? AND role = "student"',
+        [studentId]
+      );
+
+      if (students.length === 0) {
+        await connection.rollback();
+        return res.status(400).json({ error: 'Student not found' });
+      }
+
+      const student = students[0];
+
+      const [currentEnrollments] = await connection.execute(
+        'SELECT subject_id FROM enrollments WHERE student_id = ?',
+        [studentId]
+      );
+      const currentSubjectIds = currentEnrollments.map(e => e.subject_id);
+
+      const removedSubjectIds = currentSubjectIds.filter(id => !subjectIds.includes(id));
+
+      if (removedSubjectIds.length > 0) {
+        const [sessions] = await connection.execute(
+          `SELECT id FROM sessions WHERE subject_id IN (${removedSubjectIds.map(() => '?').join(',')})`,
+          removedSubjectIds
+        );
+        const sessionIds = sessions.map(s => s.id);
+        if (sessionIds.length > 0) {
+          await connection.execute(
+            `DELETE FROM attendance WHERE student_id = ? AND session_id IN (${sessionIds.map(() => '?').join(',')})`,
+            [studentId, ...sessionIds]
+          );
+        }
+
+        await connection.execute(
+          `DELETE FROM enrollments WHERE student_id = ? AND subject_id IN (${removedSubjectIds.map(() => '?').join(',')})`,
+          [studentId, ...removedSubjectIds]
+        );
+      }
+
+      const newSubjectIds = subjectIds.filter(id => !currentSubjectIds.includes(id));
+
+      for (const subjectId of newSubjectIds) {
+        await connection.execute(
+          'INSERT INTO enrollments (student_id, subject_id, qr_code_data) VALUES (?, ?, ?)',
+          [studentId, subjectId, JSON.stringify({
+            studentId: student.student_id,
+            studentName: student.full_name || '',
+            yearLevel: student.grade_level || ''
+          })]
+        );
+      }
+
+      await connection.commit();
+
+      const [updatedEnrollments] = await connection.execute(
+        `SELECT s.id, s.name, s.class_start_time, s.class_end_time
+         FROM subjects s JOIN enrollments e ON s.id = e.subject_id
+         WHERE e.student_id = ?`,
+        [studentId]
+      );
+
+      res.json({
+        message: 'Enrollments updated',
+        subjects: updatedEnrollments
+      });
+    } catch (err) {
+      await connection.rollback();
+      throw err;
+    } finally {
+      connection.release();
+    }
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
